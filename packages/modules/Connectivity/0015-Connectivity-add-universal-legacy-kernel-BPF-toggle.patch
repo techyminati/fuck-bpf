@@ -1,0 +1,88 @@
+From 7b379f9e2d1fe112c57dc44f59f19dcc279915a6 Mon Sep 17 00:00:00 2001
+From: Doze-off <viniciussadxxx@gmail.com>
+Date: Wed, 19 Aug 2026 14:23:46 +0000
+Subject: [PATCH 15/15] Connectivity: add universal legacy-kernel BPF toggle
+
+Use the same persist.sys.phh.traffic_indicator_fallback property as
+bpfloader to keep BPF loader decisions and Connectivity kernel-version
+checks consistent.
+
+When the property is true or unset, Connectivity uses the real kernel
+release obtained from uname().
+
+When the property is false, Connectivity reports kernel version 5.10.239
+for BPF feature checks. This allows supported old kernels with the required
+BPF backports to pass version gates used by the firewall-bypass path.
+
+This patch is universal and is not tied to a specific processor or SoC
+vendor. It can be used on supported Qualcomm, MediaTek, Samsung Exynos,
+Unisoc, and other devices.
+
+- Warning: disabling the fallback may break the traffic
+- indicator and can cause a black screen, OEM screen, boot failure, Wi-Fi
+- initialization failure, or bootloader screen on devices whose kernels do
+- not provide the required BPF backports.
+
+The fallback is enabled by default. If the fallback remains enabled, the
+firewall-bypass patch may not work on some devices.
+
+The MTK BPF Patcher app is optional and applies only to
+supported MediaTek kernels. It is not required by this universal patch and
+must not be used on non-MediaTek devices.
+
+On supported MediaTek devices, the MTK BPF Patcher app may be required to
+restore firewall-bypass compatibility when the fallback is enabled.
+
+- A reboot is required after changing the property because BPF programs and
+- kernel-version decisions are initialized during boot.
+
+logic: for toggle
+
+persist.sys.phh.traffic_indicator_fallback=true
+    → uses the real kernel version
+    → traffic statistics fallback enabled
+    → recommended and default mode
+    → firewall bypass may not work on some devices
+
+persist.sys.phh.traffic_indicator_fallback=false
+    → forces BPF version 5.10.239
+    → disables the fallback
+    → fully fixes firewall bypass
+    → may break the traffic indicator
+    → may cause black screen, OEM screen, Wi-Fi failure, or bootloader issues on incompatible kernels
+
+Change-Id: Ia46147ce4db04f76e3a7fb8d982bbf3a244d94f1
+---
+ bpf/headers/include/bpf/KernelUtils.h | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/bpf/headers/include/bpf/KernelUtils.h b/bpf/headers/include/bpf/KernelUtils.h
+index 970a329..ef8faed 100644
+--- a/bpf/headers/include/bpf/KernelUtils.h
++++ b/bpf/headers/include/bpf/KernelUtils.h
+@@ -35,10 +35,18 @@ static inline unsigned uncachedKernelVersion() {
+     unsigned kver_major = 0;
+     unsigned kver_minor = 0;
+     unsigned kver_sub = 0;
+-    char kver_override[PROP_VALUE_MAX];
+-    int kver_override_len = __system_property_get("ro.bpf.kver_override", kver_override);
+-    if (sscanf(kver_override_len > 0 ? kver_override : buf.release, "%u.%u.%u",
+-               &kver_major, &kver_minor, &kver_sub) < 2) abort();
++    char traffic_fallback[PROP_VALUE_MAX] = {};
++    const int prop_len = __system_property_get(
++            "persist.sys.phh.traffic_indicator_fallback",
++            traffic_fallback);
++
++    if (prop_len > 0 && !strcmp(traffic_fallback, "false")) {
++        return KVER(5, 10, 239);
++    }
++    if (sscanf(buf.release, "%u.%u.%u",
++               &kver_major, &kver_minor, &kver_sub) < 2) {
++    abort();
++    }
+     return KVER(kver_major, kver_minor, kver_sub);
+ }
+ 
+-- 
+2.43.0
+

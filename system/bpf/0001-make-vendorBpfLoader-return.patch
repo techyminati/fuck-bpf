@@ -1,7 +1,7 @@
 From 06c023e9928d53ef6a61005700056a72a0592607 Mon Sep 17 00:00:00 2001
 From: oberdfr <alebennella@gmail.com>
 Date: Wed, 18 Feb 2026 19:00:54 +0100
-Subject: [PATCH 2/4] make vendorBpfLoader return
+Subject: [PATCH 1/4] make vendorBpfLoader return
 
 Change-Id: Idc07383d28228f5bf78e299f457ac72834a236e8
 ---
